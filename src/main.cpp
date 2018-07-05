@@ -5,7 +5,6 @@
 #include <ESP8266WebServer.h>
 #include <FS.h>
 #include <Base64.h>
-#include "./passwords.h"
 
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
@@ -20,26 +19,42 @@ bool imageSet = false;
 #define MAX_DISPLAY_BYTES (SSD1306_LCDWIDTH / 8 * SSD1306_LCDHEIGHT)
 
 #define DISPLAY_TIME (10000)
+#define WIFI_CONNECT_TIMEOUT (10000)
 
 void drawStatus(const char *msg);
+void printWifiInfo();
+
+bool waitForWiFi();
 
 void handleConnection();
 void handleImage();
 
 void setup()
 {
+    Serial.begin(9600);
     SPIFFS.begin();
     Wire.begin(0, 2);
     display.begin();
-    drawStatus("Connecting to wifi");
-    WiFi.begin(WIFI_NAME, WIFI_PWD);
-    while (WiFi.status() != WL_CONNECTED)
+
+    drawStatus("Connecting to WiFi");
+
+    if (!waitForWiFi())
     {
-        delay(500);
+        drawStatus("Trying to connect\nvia WPS");
+        if (WiFi.getMode() != WIFI_STA)
+        {
+            WiFi.mode(WIFI_STA);
+            delay(1000);
+        }
+        if (!WiFi.beginWPSConfig() || WiFi.status() != WL_CONNECTED)
+        {
+            drawStatus("Could not connect to any WiFi\nrestarting...");
+            delay(2000);
+            ESP.restart();
+        }
     }
-    char str[255];
-    snprintf(str, 254, "wifi connected! \n%s", WiFi.localIP().toString().c_str());
-    drawStatus(str);
+
+    printWifiInfo();
 
     webServer.on("/image", HTTP_POST, handleImage);
     webServer.on("/image", HTTP_OPTIONS, []() {
@@ -58,9 +73,7 @@ void loop()
     if (millis() > lastImage + DISPLAY_TIME)
     {
         imageSet = false;
-        char str[255];
-        snprintf(str, 254, "wifi connected! \n%s", WiFi.localIP().toString().c_str());
-        drawStatus(str);
+        printWifiInfo();
     }
     webServer.handleClient();
 }
@@ -74,10 +87,38 @@ void drawStatus(const char *msg)
     display.display();
 }
 
+void printWifiInfo()
+{
+    char str[1024];
+    snprintf(str, 1023, "Connected to WiFi\nSSID: %s\nIP: %s",
+             WiFi.SSID().c_str(),
+             WiFi.localIP().toString().c_str());
+    drawStatus(str);
+}
+
+bool waitForWiFi()
+{
+    unsigned long connectionBegin = millis();
+
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(500);
+        display.print(".");
+        display.display();
+        if (millis() > connectionBegin + WIFI_CONNECT_TIMEOUT)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void handleConnection()
 {
     fs::File index = SPIFFS.open("/index.html", "r");
     webServer.streamFile(index, "text/html");
+    index.close();
 }
 
 void handleImage()
