@@ -13,10 +13,15 @@
 Adafruit_SSD1306 display;
 ESP8266WebServer webServer;
 
+unsigned long lastImage;
+bool imageSet = false;
+
 ***REMOVED***
 ***REMOVED***
 
 #define MAX_DISPLAY_BYTES (SSD1306_LCDWIDTH / 8 * SSD1306_LCDHEIGHT)
+
+#define DISPLAY_TIME (2000)
 
 void drawStatus(const char *msg);
 
@@ -52,6 +57,13 @@ void setup()
 
 void loop()
 {
+    if (millis() > lastImage + DISPLAY_TIME)
+    {
+        imageSet = false;
+        char str[255];
+        snprintf(str, 254, "wifi connected! \n%s", WiFi.localIP().toString().c_str());
+        drawStatus(str);
+    }
     webServer.handleClient();
 }
 
@@ -66,7 +78,6 @@ void drawStatus(const char *msg)
 
 void handleConnection()
 {
-    drawStatus(webServer.uri().c_str());
     fs::File index = SPIFFS.open("/index.html", "r");
     webServer.streamFile(index, "text/html");
 }
@@ -77,6 +88,16 @@ void handleImage()
     webServer.sendHeader("Access-Control-Allow-Origin", "*");
     webServer.sendHeader("Access-Control-Allow-Methods", "POST,GET,OPTIONS");
     webServer.sendHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+
+    if (imageSet)
+    {
+        webServer.send(409,
+                       "text/plain",
+                       "Image is already being displayed, try again in " +
+                           String(static_cast<float>(lastImage + DISPLAY_TIME - millis()) / 1000.f) +
+                           " seconds!");
+        return;
+    }
 
     if (!webServer.hasArg("width"))
     {
@@ -133,6 +154,8 @@ void handleImage()
     }
 
     webServer.send(200, "text/plain", "Image received!");
+    imageSet = true;
+    lastImage = millis();
     display.clearDisplay();
     display.drawBitmap(0, 0, reinterpret_cast<uint8_t *>(decodedData), width, height, WHITE);
     display.display();
