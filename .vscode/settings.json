@@ -5,6 +5,11 @@
     },
     "files.associations": {
         "*.tcc": "cpp",
-        "fstream": "cpp"
+        "fstream": "cpp",
+        "array": "cpp",
+        "functional": "cpp",
+        "istream": "cpp",
+        "tuple": "cpp",
+        "utility": "cpp"
     }
 }

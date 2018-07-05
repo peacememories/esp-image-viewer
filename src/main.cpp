@@ -4,6 +4,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <FS.h>
+#include <Base64.h>
 
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
@@ -14,6 +15,8 @@ ESP8266WebServer webServer;
 
 ***REMOVED***
 ***REMOVED***
+
+#define MAX_DISPLAY_BYTES (SSD1306_LCDWIDTH / 8 * SSD1306_LCDHEIGHT)
 
 void drawStatus(const char *msg);
 
@@ -74,24 +77,63 @@ void handleImage()
     webServer.sendHeader("Access-Control-Allow-Origin", "*");
     webServer.sendHeader("Access-Control-Allow-Methods", "POST,GET,OPTIONS");
     webServer.sendHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-    if (!webServer.hasArg("plain"))
+
+    if (!webServer.hasArg("width"))
     {
-        webServer.send(403, "text/plain", "No body received!");
+        webServer.send(403, "text/plain", "Width parameter expected!");
         return;
     }
 
-    String body = webServer.arg("plain");
-    if (body.length() > 1024)
+    if (!webServer.hasArg("height"))
     {
-        webServer.send(403, "text/plain", "Body needs to be 1024 bytes long, was: " + String(body.length()));
+        webServer.send(403, "text/plain", "Height parameter expected!");
+        return;
+    }
+
+    if (!webServer.hasArg("data"))
+    {
+        webServer.send(403, "text/plain", "Data parameter expected!");
+        return;
+    }
+
+    size_t width = webServer.arg("width").toInt();
+    size_t height = webServer.arg("height").toInt();
+
+    if (width > SSD1306_LCDWIDTH || height > SSD1306_LCDHEIGHT)
+    {
+        webServer.send(403, "text/plain", "Image can be at most 128x64 pixels in size!");
+        return;
+    }
+
+    size_t expectedDataLength = ceil(static_cast<float>(width) / 8.f) * height;
+
+    String encodedData = webServer.arg("data");
+
+    char encodedBuffer[encodedData.length()];
+    strncpy(encodedBuffer, encodedData.c_str(), encodedData.length());
+
+    if (Base64.decodedLength(encodedBuffer, encodedData.length()) == -1)
+    {
+        webServer.send(403, "text/plain", "Could not decode image data!");
+        return;
+    }
+
+    if (Base64.decodedLength(encodedBuffer, encodedData.length()) != static_cast<int>(expectedDataLength))
+    {
+        webServer.send(403, "text/plain", "Image data length does not match image size!");
+        return;
+    }
+
+    char decodedData[expectedDataLength];
+
+    if (Base64.decode(decodedData, encodedBuffer, encodedData.length()) == -1)
+    {
+        webServer.send(403, "text/plain", "Could not decode image data!");
         return;
     }
 
     webServer.send(200, "text/plain", "Image received!");
     display.clearDisplay();
-    uint8_t bitmap[1024];
-    memset(bitmap, 0, 1024);
-    memcpy(bitmap, body.c_str(), body.length());
-    display.drawBitmap(0, 0, bitmap, 128, 64, WHITE);
+    display.drawBitmap(0, 0, reinterpret_cast<uint8_t *>(decodedData), width, height, WHITE);
     display.display();
 }

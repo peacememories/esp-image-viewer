@@ -87,21 +87,18 @@
                 }
             }
 
+            const formData = new FormData();
+            formData.set("width", 128);
+            formData.set("height", 64);
+            formData.set("data", btoa(String.fromCharCode(...output)));
+
             const request = new XMLHttpRequest();
-            request.open("POST", "http://192.168.0.74/image", true);
+            request.open("POST", "/image", true);
             request.addEventListener("load", () => {
                 console.log("uploaded");
             });
 
-            request.setRequestHeader("Content-Length", "1024");
-
-            const blob = new Blob([output], {
-                type: "application/octet-stream"
-            });
-
-            console.log(blob);
-
-            request.send(blob);
+            request.send(formData);
         });
     </script>
 </body>
