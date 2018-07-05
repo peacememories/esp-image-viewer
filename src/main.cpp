@@ -5,6 +5,7 @@
 #include <ESP8266WebServer.h>
 #include <FS.h>
 #include <Base64.h>
+#include "./passwords.h"
 
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
@@ -15,9 +16,6 @@ ESP8266WebServer webServer;
 
 unsigned long lastImage;
 bool imageSet = false;
-
-***REMOVED***
-***REMOVED***
 
 #define MAX_DISPLAY_BYTES (SSD1306_LCDWIDTH / 8 * SSD1306_LCDHEIGHT)
 
